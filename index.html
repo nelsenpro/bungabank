@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Simulasi Bunga Perbankan</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      transition: background-color 0.3s ease, color 0.3s ease;
+    }
+    input {
+      transition: border-color 0.3s ease, background-color 0.3s ease;
+    }
+    button {
+      transition: background-color 0.3s ease;
+    }
+    canvas {
+      max-width: 100%;
+      height: auto;
+    }
+  </style>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-white min-h-screen p-6">
+
+  <div class="max-w-xl mx-auto bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
+    <h1 class="text-2xl font-bold text-center mb-6">Simulasi Bunga Perbankan</h1>
+
+    <div class="space-y-4">
+      <div>
+        <label for="modal" class="block font-medium">Modal (Rp):</label>
+        <input type="text" id="modal" placeholder="Contoh: 20.000.000"
+               class="w-full px-4 py-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700" />
+      </div>
+
+      <div>
+        <label for="bunga" class="block font-medium">Bunga Tahunan (%):</label>
+        <input type="number" id="bunga" step="0.01" value="7.5"
+               class="w-full px-4 py-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700" />
+      </div>
+
+      <div>
+        <label for="tahun" class="block font-medium">Lama Simpan (tahun):</label>
+        <input type="number" id="tahun" step="1" value="1"
+               class="w-full px-4 py-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700" />
+      </div>
+
+      <div>
+        <label for="hari" class="block font-medium">Atau Simpanan (hari):</label>
+        <input type="number" id="hari" step="1" value="365"
+               class="w-full px-4 py-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700" />
+      </div>
+
+      <div class="flex gap-4 mt-4">
+        <button id="hitungBtn" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded">
+          Hitung
+        </button>
+        <button id="resetBtn" class="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-2 rounded">
+          Reset
+        </button>
+      </div>
+    </div>
+
+    <div id="result" class="mt-6 hidden">
+      <h2 class="text-xl font-semibold mb-2">Hasil Simulasi</h2>
+      <p>Bunga Kotor: <span class="font-bold text-green-600" id="bungaKotor"></span></p>
+      <p>Pajak (20%): <span class="text-red-500" id="pajak"></span></p>
+      <p>Bunga Bersih: <span class="font-bold text-blue-600" id="bungaBersih"></span></p>
+      <div class="relative w-full" style="height: 300px;">
+        <canvas id="grafikBunga" class="mt-4"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let chartInstance;
+
+    // Cache DOM elements
+    const modalInput = document.getElementById('modal');
+    const bungaInput = document.getElementById('bunga');
+    const tahunInput = document.getElementById('tahun');
+    const hariInput = document.getElementById('hari');
+    const hitungBtn = document.getElementById('hitungBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const resultDiv = document.getElementById('result');
+    const bungaKotorSpan = document.getElementById('bungaKotor');
+    const pajakSpan = document.getElementById('pajak');
+    const bungaBersihSpan = document.getElementById('bungaBersih');
+    const grafikBungaCanvas = document.getElementById('grafikBunga');
+
+    function formatRupiahInput(inputElement) {
+      let cursorPos = inputElement.selectionStart;
+      let originalLength = inputElement.value.length;
+
+      let value = inputElement.value.replace(/[^\d]/g, '');
+
+      if (value) {
+        value = new Intl.NumberFormat('id-ID').format(parseInt(value));
+      }
+
+      inputElement.value = value;
+
+      let newLength = value.length;
+      let diff = newLength - originalLength;
+
+      inputElement.selectionStart = inputElement.selectionEnd = cursorPos + diff;
+    }
+
+    function parseRupiah(str) {
+      return parseFloat(str.replace(/\./g, '')) || 0;
+    }
+
+    const formatRupiah = (num) => {
+      return new Intl.NumberFormat("id-ID", {
+        style: "currency",
+        currency: "IDR",
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 2,
+      }).format(num);
+    };
+
+    function ubahTahunKeHari() {
+      const tahun = parseInt(tahunInput.value);
+      if (!isNaN(tahun)) {
+        hariInput.value = tahun * 365;
+      }
+    }
+
+    function ubahHariKeTahun() {
+      const hari = parseInt(hariInput.value);
+      if (!isNaN(hari)) {
+        tahunInput.value = Math.round(hari / 365);
+      }
+    }
+
+    function hitungDeposito() {
+      const modal = parseRupiah(modalInput.value);
+      const bungaTahunan = parseFloat(bungaInput.value);
+      const hari = parseInt(hariInput.value);
+
+      if (modal <= 0 || isNaN(bungaTahunan) || bungaTahunan <= 0 || isNaN(hari) || hari <= 0) {
+        alert('Pastikan semua nilai diisi dengan benar dan lebih dari nol.');
+        return;
+      }
+
+      const bungaKotor = modal * (bungaTahunan / 100) * (hari / 365);
+      const pajak = bungaKotor * 0.2;
+      const bungaBersih = bungaKotor - pajak;
+
+      bungaKotorSpan.textContent = formatRupiah(bungaKotor);
+      pajakSpan.textContent = formatRupiah(pajak);
+      bungaBersihSpan.textContent = formatRupiah(bungaBersih);
+      resultDiv.classList.remove('hidden');
+
+      tampilkanGrafik(modal, bungaTahunan, hari);
+    }
+
+    function resetForm() {
+      modalInput.value = '';
+      bungaInput.value = 7.5;
+      tahunInput.value = 1;
+      hariInput.value = 365;
+      resultDiv.classList.add('hidden');
+      if (chartInstance) {
+        chartInstance.destroy();
+        chartInstance = null;
+      }
+    }
+
+    function tampilkanGrafik(modal, bungaTahunan, hari) {
+      const ctx = grafikBungaCanvas.getContext('2d');
+      const step = Math.max(30, Math.floor(hari / 10));
+      const labels = [];
+      const data = [];
+
+      for (let d = step; d <= hari; d += step) {
+        const bunga = modal * (bungaTahunan / 100) * (d / 365) * 0.8;
+        labels.push(`${d} hari`);
+        data.push(Math.round(bunga));
+      }
+
+      if (hari % step !== 0 && hari > 0) {
+        const bungaAkhir = modal * (bungaTahunan / 100) * (hari / 365) * 0.8;
+        labels.push(`${hari} hari`);
+        data.push(Math.round(bungaAkhir));
+      }
+
+      if (chartInstance) chartInstance.destroy();
+      chartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Bunga Bersih (Rp)',
+            data: data,
+            borderColor: '#3b82f6',
+            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+            fill: true,
+            tension: 0.3,
+            pointRadius: 3,
+            pointHoverRadius: 5,
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  let label = context.dataset.label || '';
+                  if (label) label += ': ';
+                  if (context.parsed.y !== null) {
+                    label += formatRupiah(context.parsed.y);
+                  }
+                  return label;
+                }
+              }
+            }
+          },
+          scales: {
+            x: {
+              grid: {
+                color: 'rgba(200, 200, 200, 0.2)'
+              }
+            },
+            y: {
+              beginAtZero: true,
+              ticks: {
+                callback: function(value) {
+                  return 'Rp ' + value.toLocaleString('id-ID');
+                }
+              },
+              grid: {
+                color: 'rgba(200, 200, 200, 0.2)'
+              }
+            }
+          }
+        }
+      });
+    }
+
+    // Event listeners
+    modalInput.addEventListener('input', () => formatRupiahInput(modalInput));
+    tahunInput.addEventListener('input', ubahTahunKeHari);
+    hariInput.addEventListener('input', ubahHariKeTahun);
+    hitungBtn.addEventListener('click', hitungDeposito);
+    resetBtn.addEventListener('click', resetForm);
+  </script>
+</body>
+                         </html>
